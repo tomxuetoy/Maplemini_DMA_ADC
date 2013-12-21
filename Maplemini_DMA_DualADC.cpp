@@ -147,7 +147,8 @@ void XAdc::set_sample_rate ( adc_smp_rate smp_rate ){
 uint16 adcbuf[2000];
 uint8 linebuf[80];
 XAdc xadc;
-
+unsigned long start = 0;
+unsigned long stop = 0;
 
 void dumpline(uint16 value, uint8 p){
   uint8 pos=(p) ? (38):(1);
@@ -161,7 +162,7 @@ void dumpline(uint16 value, uint8 p){
 void setup() {
   //Setup XAdc
   xadc.set_options(3,4,XAdc::Dual,XAdc::Blocking,adcbuf);
-  xadc.set_sample_rate(XADC_SAMPLE_RATE_55kHz);
+  xadc.set_sample_rate(XADC_SAMPLE_RATE_1000kHz);
 
   //led
   pinMode(BOARD_LED_PIN, OUTPUT);
@@ -181,7 +182,14 @@ void setup() {
 }
 
 void loop(){
-  xadc.read(100);
+  start = millis();
+  xadc.read(10000);
+  stop = millis();
+  SerialUSB.println("Stop loops:");
+  SerialUSB.print("Elapsed Time: ");
+  SerialUSB.print(stop - start);
+  SerialUSB.print(" milliseconds (for ");
+
   for(int i=0;i<100;i++) {
     dumpline(adcbuf[i],i%2);
     SerialUSB.write(linebuf,80);
@@ -206,4 +214,3 @@ int main(void) {
   }
   return 0;
 }
-
