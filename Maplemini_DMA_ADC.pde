@@ -68,7 +68,7 @@ void setup()
   //  Serial1.begin(115200);     //Optional, if Serial1 is used.
   welcome_message();
   /* Set the relevant ADC pins to analog in */
-  pinMode(3, INPUT_ANALOG);  //Pins 27,28, ADC channels 8,9
+  pinMode(3, INPUT_ANALOG);  //Pins 3,33 as ADC channels 8,9
   pinMode(33, INPUT_ANALOG);
   pinMode(10, INPUT_ANALOG);
   pinMode(9, INPUT_ANALOG);
