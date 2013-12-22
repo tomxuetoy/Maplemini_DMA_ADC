@@ -8,7 +8,7 @@
 //switch SINGLE/DUAL/(Fast interleaved mode only) mode for dev
 #define XADC_SINGLE_MODE_FUN(dev) dev->regs->CR1 &= 0xfff0ffff
 #define XADC_DUAL_MODE_FUN(dev) dev->regs->CR1 &= 0xfff6ffff
-#define XADC_DUAL_MODE_FUN(dev) dev->regs->CR1 &= 0xfff6ffff
+#define XADC_FAST_INTERLEAVED_MODE_FUN(dev) dev->regs->CR1 &= 0xfff7ffff
 
 //does the above for ADC1 and ADC2
 #define XADC_DMA_ON() XADC_DMA_ON_FUN(ADC1);XADC_DMA_ON_FUN(ADC2)
