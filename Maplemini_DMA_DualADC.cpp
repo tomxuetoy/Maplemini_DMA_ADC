@@ -62,10 +62,25 @@ void XAdc::setup_dual_dma_transfer(uint16 samples){
   XADC_DMA_ON();
 }
 
+void XAdc::setup_fast_dma_transfer(uint16 samples){
+  dma_init(XADC_DMA_DEV);
+  dma_setup_transfer(XADC_DMA_DEV, XADC_DMA_CH,
+  &ADC1->regs->DR, DMA_SIZE_32BITS,
+  buffer,           DMA_SIZE_32BITS,
+  (DMA_MINC_MODE | /*DMA_CIRC_MODE |*/ DMA_TRNS_ERR | DMA_TRNS_CMPLT
+    ));
+  dma_set_num_transfers(XADC_DMA_DEV, XADC_DMA_CH, samples*sizeof(uint32));
+  dma_set_priority(XADC_DMA_DEV,XADC_DMA_CH,DMA_PRIORITY_VERY_HIGH);
+  dma_enable(XADC_DMA_DEV, XADC_DMA_CH);
+
+  //set ADC for dma transfer
+  XADC_FAST_MODE();
+  XADC_DMA_ON();
+}
+
 void XAdc::stop_dma_transfer(){
   XADC_DMA_OFF();
   dma_disable(XADC_DMA_DEV,XADC_DMA_CH);
-
 }
 
 uint8 XAdc::is_transfer_finished() {
