@@ -37,6 +37,7 @@ class XAdc {
 		
 		void setup_single_dma_transfer(uint16 samples);
 		void setup_dual_dma_transfer(uint16 samples);
+		void setup_fast_dma_transfer(uint16 samples);
 		uint8 is_transfer_finished();
 		void stop_dma_transfer();
 		
