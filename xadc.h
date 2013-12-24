@@ -33,7 +33,7 @@ class XAdc {
 		XAdc();
 		
 		uint8 read();
-		uint8 read(uint16 samples);
+		void read(uint16 samples);
 		
 		void setup_single_dma_transfer(uint16 samples);
 		void setup_dual_dma_transfer(uint16 samples);
