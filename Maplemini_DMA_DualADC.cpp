@@ -5,10 +5,9 @@
 #define XADC_DMA_ON_FUN(dev) dev->regs->CR2 |= XADC_ENABLE_DMA; dev->regs->CR2 |=0x2; dev->regs->CR2 &= (0xfffff7ff)
 #define XADC_DMA_OFF_FUN(dev) dev->regs->CR2 |= XADC_DISABLE_DMA; dev->regs->CR2 |=(~0x2); dev->regs->CR2 &= (0xfffff7ff)
 
-//switch SINGLE/DUAL/(Fast interleaved mode only) mode for dev
+//switch SINGLE/DUAL mode for dev
 #define XADC_SINGLE_MODE_FUN(dev) dev->regs->CR1 &= 0xfff0ffff
 #define XADC_DUAL_MODE_FUN(dev) dev->regs->CR1 &= 0xfff6ffff
-#define XADC_FAST_INTERLEAVED_MODE_FUN(dev) dev->regs->CR1 &= 0xfff7ffff
 
 //does the above for ADC1 and ADC2
 #define XADC_DMA_ON() XADC_DMA_ON_FUN(ADC1);XADC_DMA_ON_FUN(ADC2)
@@ -16,9 +15,7 @@
 
 #define XADC_SINGLE_MODE() XADC_SINGLE_MODE_FUN(ADC1);XADC_SINGLE_MODE_FUN(ADC2)
 #define XADC_DUAL_MODE() XADC_DUAL_MODE_FUN(ADC1);XADC_DUAL_MODE_FUN(ADC2)
-#define XADC_FAST_MODE() XADC_FAST_INTERLEAVED_MODE_FUN(ADC1);XADC_FAST_INTERLEAVED_MODE_FUN(ADC2)
 
-unsigned int val;
 
 XAdc::XAdc() {
   buffer=NULL;
@@ -35,7 +32,7 @@ void XAdc::setup_single_dma_transfer(uint16 samples){
   dma_init(XADC_DMA_DEV);
   dma_setup_transfer(XADC_DMA_DEV, XADC_DMA_CH,
   &ADC1->regs->DR, DMA_SIZE_16BITS,
-  buffer, DMA_SIZE_16BITS,
+  buffer,           DMA_SIZE_16BITS,
   (DMA_MINC_MODE | /*DMA_CIRC_MODE |*/ DMA_TRNS_ERR | DMA_TRNS_CMPLT
     ));
   dma_set_num_transfers(XADC_DMA_DEV, XADC_DMA_CH, samples*sizeof(uint16));
@@ -51,7 +48,7 @@ void XAdc::setup_dual_dma_transfer(uint16 samples){
   dma_init(XADC_DMA_DEV);
   dma_setup_transfer(XADC_DMA_DEV, XADC_DMA_CH,
   &ADC1->regs->DR, DMA_SIZE_32BITS,
-  buffer, DMA_SIZE_32BITS,
+  buffer,           DMA_SIZE_32BITS,
   (DMA_MINC_MODE | /*DMA_CIRC_MODE |*/ DMA_TRNS_ERR | DMA_TRNS_CMPLT
     ));
   dma_set_num_transfers(XADC_DMA_DEV, XADC_DMA_CH, samples*sizeof(uint32));
@@ -63,25 +60,10 @@ void XAdc::setup_dual_dma_transfer(uint16 samples){
   XADC_DMA_ON();
 }
 
-void XAdc::setup_fast_dma_transfer(uint16 samples){
-  dma_init(XADC_DMA_DEV);
-  dma_setup_transfer(XADC_DMA_DEV, XADC_DMA_CH,
-  &ADC1->regs->DR, DMA_SIZE_32BITS,
-  buffer, DMA_SIZE_32BITS,
-  (DMA_MINC_MODE | /*DMA_CIRC_MODE |*/ DMA_TRNS_ERR | DMA_TRNS_CMPLT
-    ));
-  dma_set_num_transfers(XADC_DMA_DEV, XADC_DMA_CH, samples*sizeof(uint32));
-  dma_set_priority(XADC_DMA_DEV,XADC_DMA_CH,DMA_PRIORITY_VERY_HIGH);
-  dma_enable(XADC_DMA_DEV, XADC_DMA_CH);
-
-  //set ADC for dma transfer
-  XADC_FAST_MODE();
-  XADC_DMA_ON();
-}
-
 void XAdc::stop_dma_transfer(){
   XADC_DMA_OFF();
   dma_disable(XADC_DMA_DEV,XADC_DMA_CH);
+
 }
 
 uint8 XAdc::is_transfer_finished() {
@@ -95,16 +77,34 @@ uint8 XAdc::is_transfer_finished() {
 //Reading
 
 uint8 XAdc::read(){
-//  return read(1);
+  return read(1);
 }
 
-void XAdc::read ( uint16 samples ){
+uint8 XAdc::read ( uint16 samples ){
 
+  if(dual) setup_dual_dma_transfer(samples);
+  else setup_single_dma_transfer(samples);
+
+
+  adc_set_reg_seqlen(ADC1, 1);
+  ADC1->regs->SQR3 = PIN_MAP[pin1].adc_channel;
+
+  if(dual) {
+    //set up ADC2
+    adc_set_reg_seqlen(ADC2, 1);
+    ADC2->regs->SQR3 = PIN_MAP[pin2].adc_channel;
+  }
+  //start reading. ADC2 is slave, no need to start it
   ADC1->regs->CR2 |= ADC_CR2_SWSTART;
 
-  while (!(ADC2->regs->SR & ADC_SR_EOC))
-      ;
-  val = (uint16)(ADC2->regs->DR & ADC_DR_DATA);
+  size=samples;
+  if (blocking) {
+    while(!is_transfer_finished());
+    stop_dma_transfer();
+    return (result==DMA_TRANSFER_COMPLETE);
+  }
+
+  return 1;
 }
 
 //OPTIONS
@@ -144,7 +144,7 @@ void XAdc::set_sample_rate ( adc_smp_rate smp_rate ){
   adc_set_sample_rate(ADC1, smp_rate);
 }
 
-uint16 adcbuf[512];
+uint16 adcbuf[2000];
 uint8 linebuf[80];
 XAdc xadc;
 unsigned long start = 0;
@@ -160,13 +160,9 @@ void dumpline(uint16 value, uint8 p){
 
 
 void setup() {
-  adc_set_prescaler(ADC_PRE_PCLK2_DIV_2);
-  adc_set_sample_rate(ADC1, ADC_SMPR_1_5);
-  adc_set_sample_rate(ADC2, ADC_SMPR_1_5);
-    
   //Setup XAdc
   xadc.set_options(3,4,XAdc::Dual,XAdc::Blocking,adcbuf);
-//  xadc.set_sample_rate(XADC_SAMPLE_RATE_1000kHz);
+  xadc.set_sample_rate(XADC_SAMPLE_RATE_1000kHz);
 
   //led
   pinMode(BOARD_LED_PIN, OUTPUT);
@@ -186,28 +182,18 @@ void setup() {
 }
 
 void loop(){
-  
-  XADC_FAST_MODE();
-  adc_set_reg_seqlen(ADC1, 1);
-  ADC1->regs->SQR3 = PIN_MAP[3].adc_channel;
-  adc_set_reg_seqlen(ADC2, 1);
-  ADC2->regs->SQR3 = PIN_MAP[3].adc_channel;
-
-  start = micros();
-  for(int k=0;k<1000;k++)
-    xadc.read(100);
-  stop = micros();
+  start = millis();
+  xadc.read(100);
+  stop = millis();
   SerialUSB.println("Stop loops:");
   SerialUSB.print("Elapsed Time: ");
   SerialUSB.print(stop - start);
-  SerialUSB.print(" us (for ");
-  SerialUSB.print(" val = ");
-  SerialUSB.print(val);
+  SerialUSB.print(" milliseconds (for ");
 
-//  for(int i=0;i<100;i++) {
-//    dumpline(adcbuf[i],i%2);
-//    SerialUSB.write(linebuf,80);
-//  }
+  for(int i=0;i<100;i++) {
+    dumpline(adcbuf[i],i%2);
+    SerialUSB.write(linebuf,80);
+  }
   toggleLED();
   togglePin(6);
   delay(100);
